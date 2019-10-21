@@ -63,11 +63,12 @@ class DependPlugin(plugin.PyangPlugin):
         emit_depend(ctx, modules, fd)
 
 def emit_depend(ctx, modules, fd):
+    module_list = []
     for module in modules:
-        if ctx.opts.depend_target is None:
-            fd.write('%s :' % module.pos.ref)
-        else:
-            fd.write('%s :' % ctx.opts.depend_target)
+        #if ctx.opts.depend_target is None:
+        #    fd.write('%s :' % module.pos.ref)
+        #else:
+        #    fd.write('%s :' % ctx.opts.depend_target)
         prereqs = []
         add_prereqs(ctx, module, prereqs)
         for i in prereqs:
@@ -86,8 +87,26 @@ def emit_depend(ctx, modules, fd):
                     ext = ""
                 else:
                     ext = ctx.opts.depend_extension
-                fd.write(' %s%s' % (i, ext))
-        fd.write('\n')
+                #fd.write(' %s%s' % (i, ext))
+        mod_dict = {'module': module.arg, 'deps': prereqs}
+        module_list.append(mod_dict)
+        #fd.write('\n')
+    sorted_modules = sorted(module_list, key = lambda n: len(n['deps']))
+
+    # Need to add ietf-hardware before ietf-interfaces, because of an augmentation from o-ran-interfaces
+    saved_mod = None
+    for mod in sorted_modules:
+        if mod['module'] == 'ietf-hardware':
+            saved_mod = mod
+            sorted_modules.remove(mod)
+            break
+    for i in range(len(sorted_modules)):
+        if sorted_modules[i]['module'] == 'ietf-interfaces':
+            sorted_modules.insert(i, saved_mod)
+            break
+
+    ordered_modules = ".yang\n".join(mod['module'] for mod in sorted_modules)
+    fd.write('%s.yang\n' % ordered_modules)
 
 def add_prereqs(ctx, module, prereqs):
     new = [i.arg for i in module.search("import") if i.arg not in prereqs]

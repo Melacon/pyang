@@ -13,6 +13,7 @@ class YANGPlugin(plugin.PyangPlugin):
     def add_output_format(self, fmts):
         fmts['yang'] = self
         self.handle_comments = True
+        self.name = "yang"
 
     def add_opts(self, optparser):
         optlist = [
