@@ -31,3 +31,8 @@ schemas.xml
 /test/test_json/test-data.xml
 /test/test_xsd/*.xsd
 /test/test_*/out/
+
+.cproject
+.project
+.pydevproject
+/venv/*
