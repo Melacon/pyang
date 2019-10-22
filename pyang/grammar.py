@@ -185,8 +185,8 @@ stmt_map = {
         ('if-feature-expr', []),
     'identity':
         ('identifier',
-         [('base', '*'), # '?' in yang version 1; checked in statements.py
-          ('$1.1', ('if-feature', '*')),
+         [('$1.1', ('if-feature', '*')),
+          ('base', '*'), # '?' in yang version 1; checked in statements.py
           ('status', '?'),
           ('description', '?'),
           ('reference', '?')]),
@@ -790,9 +790,12 @@ def flatten_spec(spec):
             res.append((s))
         elif kw == '$choice':
             for branch in s:
-                res.extend(flatten_spec(branch))
+                for bs in flatten_spec(branch):
+                    if bs not in res:
+                        res.append(bs)
         else:
-            res.append((kw,s))
+            if (kw, s) not in res:
+                res.append((kw,s))
     return res
 
 

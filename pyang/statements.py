@@ -311,7 +311,7 @@ _refinements = [
     ('presence', ['container'], False, None),
     ('must', ['container', 'leaf', 'leaf-list', 'list', 'anyxml', 'anydata'],
      True, None),
-    ('default', ['leaf', 'choice'],
+    ('default', ['leaf', ('$1.1', 'leaf-list'), 'choice'],
      False, lambda ctx, target, default: v_default(ctx, target, default)),
     ('mandatory', ['leaf', 'choice', 'anyxml', 'anydata'], False, None),
     ('min-elements', ['leaf-list', 'list'], False, None),
@@ -1600,7 +1600,8 @@ def v_expand_1_uses(ctx, stmt):
             continue
         refined[target] = refinement.pos
 
-        for (keyword, valid_keywords, merge, v_fun) in _refinements:
+        for (keyword, valid_keywords0, merge, v_fun) in _refinements:
+            valid_keywords = filter_valid_keywords(valid_keywords0, stmt)
             if merge:
                 merge_from_refinement(target, refinement, keyword,
                                       valid_keywords, v_fun)
@@ -1621,6 +1622,18 @@ def v_expand_1_uses(ctx, stmt):
         # after refinement, we need to re-run some of the tests, e.g. if
         # the refinement added a default value it needs to be checked.
         v_recheck_target(ctx, ch, reference=False)
+
+def filter_valid_keywords(keywords, stmt):
+    res = []
+    for i in keywords:
+        if type(i) == type(()):
+            if stmt.i_module.i_version != '1':
+                res.append(i[1])
+            else:
+                res.append(i)
+        else:
+            res.append(i)
+    return res
 
 def v_inherit_properties(ctx, stmt, child=None):
     def iter(s, config_value, allow_explicit):
@@ -3115,7 +3128,7 @@ def mk_path_list(stmt):
     """
     resolved_names = []
     def resolve_stmt(stmt, resolved_names):
-        if stmt.keyword in ['choice', 'case']:
+        if stmt.keyword in ['choice', 'case', 'input', 'output']:
             resolve_stmt(stmt.parent, resolved_names)
             return
         def qualified_name_elements(stmt):
