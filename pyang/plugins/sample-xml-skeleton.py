@@ -704,6 +704,13 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                                 break
                             elif when_value == random_identity_value:
                                 break
+                    # no references, maybe is is the base identity
+                    elif identity == random_identity['identity_name']:
+                        random_identity_value = random_identity['prefix'] + ':' + random_identity['identity_name']
+                        if when_value is None:
+                            break
+                        elif when_value == random_identity_value:
+                            break
 
                 nsmap = {random_identity['prefix']: random_identity['namespace']}
                 return random_identity['prefix'] + ':' + random_identity['identity_name'], nsmap
