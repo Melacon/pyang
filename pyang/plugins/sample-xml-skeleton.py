@@ -452,6 +452,11 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
         minel = node.search_one("min-elements")
         maxel = node.search_one('max-elements')
 
+        #we hardcode some values here, regardless of other configuration
+        #e.g.: layer-protocol we need to have only 1 entry!
+        if node.arg == 'layer-protocol':
+            return 0
+
         num_entries_constraint = 0
         for constraint in self.constraints:
             if constraint['module'] == node.i_module.arg and constraint['name'] == node.arg:
@@ -691,35 +696,44 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                 identity = n_type.i_type_spec.idbases[0].i_identity.arg
                 while True:
                     when_value = self.get_when_entry(node.arg, node.i_module.arg)
-                    random_identity = choice(self.identity_refs)
-                    values = random_identity['ref_list']
-                    if len(values) > 0:
-                        try:
-                            random_identity_name = values[-1]
-                        except IndexError:
-                            pass
-                        if random_identity_name == identity:
-                            random_identity_value = random_identity['prefix'] + ':' + random_identity['identity_name']
-                            if when_value is None:
+                    ref_list = []
+                    for id_ref in self.identity_refs:
+                        values = id_ref['ref_list']
+                        if len(values) > 0:
+                            try:
+                                id_name = values[-1]
+                            except IndexError:
+                                continue
+                            if id_name == identity:
+                                ref_list.append(id_ref)
+                    if len(ref_list) == 0:
+                        for id_ref in self.identity_refs:
+                            if id_ref['identity_name'] == identity:
+                                random_identity = id_ref
                                 break
-                            elif when_value == random_identity_value:
-                                break
-                    # no references, maybe is is the base identity
-                    elif identity == random_identity['identity_name']:
-                        random_identity_value = random_identity['prefix'] + ':' + random_identity['identity_name']
-                        if when_value is None:
-                            break
-                        elif when_value == random_identity_value:
-                            break
+                        pass
+                    else:
+                        random_identity = choice(ref_list)
+                        pass
+                    random_identity_value = random_identity['prefix'] + ':' + random_identity['identity_name']
+                    if when_value is None:
+                        break
+                    elif when_value == random_identity_value:
+                        break
 
-                nsmap = {random_identity['prefix']: random_identity['namespace']}
-                return random_identity['prefix'] + ':' + random_identity['identity_name'], nsmap
+                if random_identity['prefix'] != node.i_module.i_prefix:
+                    nsmap = {random_identity['prefix']: random_identity['namespace']}
+                    return random_identity['prefix'] + ':' + random_identity['identity_name'], nsmap
+                else:
+                    return random_identity['identity_name'], None
                 #text = n_type.i_type_spec.name + ':' + n_type.i_type_spec.idbases[0].i_identity.arg
                 #return text
             elif isinstance(n_type.i_type_spec, pType.EmptyTypeSpec):
                 return "", None
             elif isinstance(n_type.i_type_spec, pType.UnionTypeSpec):
-                union_type = choice(n_type.i_type_spec.types)
+                #union_type = choice(n_type.i_type_spec.types)
+                #we choose the first union type, which in theory is the most restrictive
+                union_type = n_type.i_type_spec.types[0]
                 return self.get_random_text(node=node, elem=None, ntype=union_type)
             elif isinstance(n_type.i_type_spec, pType.BitTypeSpec):
                 text = ''
@@ -825,6 +839,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             if len(yam.i_identities) > 0:
                 for name in yam.i_identities:
                     identity = yam.i_identities[name]
+                    when, target = is_when_statement_present(identity)
                     identity_ref = {}
                     identity_name = identity.arg
                     identity_ref['identity_name'] = identity_name

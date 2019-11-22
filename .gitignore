@@ -36,3 +36,4 @@ schemas.xml
 .project
 .pydevproject
 /venv/*
+/bin/*.xml
