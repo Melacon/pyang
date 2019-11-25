@@ -839,7 +839,6 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             if len(yam.i_identities) > 0:
                 for name in yam.i_identities:
                     identity = yam.i_identities[name]
-                    when, target = is_when_statement_present(identity)
                     identity_ref = {}
                     identity_name = identity.arg
                     identity_ref['identity_name'] = identity_name
@@ -1064,6 +1063,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                 # we can't check the path
                 pass
             elif axis == 'self':
+                node1 = node
                 pass
             elif axis == 'child' and nodetest[0] == 'name':
                 prefix = nodetest[1]
