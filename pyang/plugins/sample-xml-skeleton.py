@@ -570,15 +570,15 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                 is_key = node.i_is_key
             # we iterate through all the nodes in the leafref
             for list_elem in node.i_leafref.i_path_list:
+                if list_elem[0] == 'up':
+                    #target = '../' + target
+                    continue
                 # we extract the node element from the path_list
                 target_node = list_elem[1]
                 # we extract the prefix of the node
                 target_node_prefix = target_node.i_module.i_prefix
                 # we extract the node name
                 target_node_name = target_node.arg
-                if list_elem[0] == 'up':
-                    #target = '../' + target
-                    continue
                 target = target + '/'
                 # if we are in the same module as the target node, we do not add the prefix, it is redundant
                 if target_node_prefix != node.i_module.i_prefix:
@@ -666,7 +666,19 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                     return generate_random_macaddr(), None
                 else:
                     regex = n_type.i_type_spec.res[0][4]
-                    rand_string = exrex.getone(regex)
+                    type_base = n_type.i_type_spec.base
+                    if isinstance(type_base, pType.LengthTypeSpec):
+                        str_length = 20
+                        try:
+                            str_length = type_base.lengths[0][0]
+                        except IndexError:
+                            pass
+                        while True:
+                            rand_string = exrex.getone(regex)
+                            if len(rand_string) == str_length:
+                                break
+                    else:
+                        rand_string = exrex.getone(regex)
                     return rand_string, None
             elif isinstance(n_type.i_type_spec, pType.RangeTypeSpec):
                 if len(n_type.i_type_spec.ranges) > 0:
