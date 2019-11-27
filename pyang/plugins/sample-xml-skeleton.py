@@ -456,6 +456,14 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
         #e.g.: layer-protocol we need to have only 1 entry!
         if node.arg == 'layer-protocol':
             return 0
+        elif node.arg == 'server-ltp':
+            return 0
+        elif node.arg == 'client-ltp':
+            return 0
+        elif node.arg == 'current-performance-data-list':
+            return 1
+        elif node.arg == 'historical-performance-data-list':
+            return 95
 
         num_entries_constraint = 0
         for constraint in self.constraints:
@@ -705,7 +713,9 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                 else:
                     return str(randrange(n_type.i_type_spec.min, n_type.i_type_spec.max)), None
             elif isinstance(n_type.i_type_spec, pType.IdentityrefTypeSpec):
-                identity = n_type.i_type_spec.idbases[0].i_identity.arg
+                identity_name = n_type.i_type_spec.idbases[0].i_identity.arg
+                identity_prefix = n_type.i_type_spec.idbases[0].i_module.i_prefix
+                identity = identity_prefix + ':' + identity_name
                 while True:
                     when_value = self.get_when_entry(node.arg, node.i_module.arg)
                     ref_list = []
@@ -865,7 +875,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                             break
                         else:
                             parent_identity = parent_base.i_identity
-                            base_list.append(parent_identity.arg)
+                            base_list.append(parent_identity.i_module.i_prefix + ':' + parent_identity.arg)
                             current_identity = parent_identity
                     identity_ref['ref_list'] = base_list
                     self.identity_refs.append(identity_ref)
