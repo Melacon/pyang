@@ -547,7 +547,14 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             try:
                 val = self.chk_xpath_expr(self.ctx, when_statement.i_orig_module,
                                         when_statement.pos, target_node, target_node, q)
-                when_in_xml = verify_xml_xpath_expr(val, parent)
+                where_to_find = None
+                if parent.tag == target_node.arg:
+                    where_to_find = parent
+                else:
+                    where_to_find = parent
+                    while where_to_find.tag != target_node.arg and where_to_find is not None:
+                        where_to_find = where_to_find.getparent()
+                when_in_xml = verify_xml_xpath_expr(val, where_to_find)
                 if when_in_xml is False or when_in_xml is None:
                     return None, module, path
 
