@@ -47,6 +47,7 @@ import exrex
 import re
 from ipaddress import IPv4Address, IPv6Address
 import base64
+from xml.dom import minidom
 
 
 def pyang_plugin_init():
@@ -69,6 +70,7 @@ def make_target_for_xpath(target, current_node):
         beginning_index = current_index + len('current()/')
         path = target[beginning_index:last_index]
         target_node = current_node
+        found = False
         for step in path.split('/'):
             if step == '..':
                 target_node = target_node.getparent()
@@ -76,8 +78,11 @@ def make_target_for_xpath(target, current_node):
                 for kid in target_node:
                     if kid.tag == step:
                         target_node = kid
+                        found = True
                         break
                 break
+        if found is False:
+            return None
         target = "'".join((target[:current_index], target_node.text, target[last_index:]))
 
     return target
@@ -100,11 +105,11 @@ def generate_random_ipaddr(version):
 
 def generate_random_macaddr():
     return "%02x:%02x:%02x:%02x:%02x:%02x" % (randint(0, 255),
-                             randint(0, 255),
-                             randint(0, 255),
-                             randint(0, 255),
-                             randint(0, 255),
-                             randint(0, 255))
+                                              randint(0, 255),
+                                              randint(0, 255),
+                                              randint(0, 255),
+                                              randint(0, 255),
+                                              randint(0, 255))
 
 
 def is_when_statement_present(node):
@@ -123,6 +128,7 @@ def is_when_statement_present(node):
 
 def verify_when_in_xml(target_node_name, target_node_module, node_value, xml_node, eq):
     where_to_find = xml_node
+    target_node = None
     while where_to_find is not None:
         target_node = where_to_find.find('.//' + target_node_name)
         if target_node is not None:
@@ -136,7 +142,6 @@ def verify_when_in_xml(target_node_name, target_node_module, node_value, xml_nod
 
 
 def delete_remaining_leafrefs(root):
-
     for child in root.getiterator():
         if child.text is not None and "leafref" in child.text:
             parent = child.getparent()
@@ -239,7 +244,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
         self.leaf_entries = ctx.opts.list_entries
 
         self.layer_protocol_name = ["OTU", "ODU", "ETH", "ETY", "MWPS", "MWS", "ETC"]
-        self.excluded_modules = ["ietf-netconf-acm", "ietf-netconf-monitoring", "ietf-yang-library"]
+        self.excluded_modules = ["ietf-netconf-acm", "ietf-netconf-monitoring", "ietf-yang-library",
+                                 "openconfig-telemetry"]
 
         self.ctx = ctx
 
@@ -273,6 +279,10 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
         # even a third iteration, if we have leafref to leafref
         root = tree.getroot()
 
+        # xmlstr = minidom.parseString(etree.tostring(root)).toprettyxml(indent="   ")
+        # with open("debug.xml", "w") as f:
+        #    f.write(xmlstr)
+
         emergency_stop = 1
         while self.resolve_leafrefs(root, True) is True:
             emergency_stop += 1
@@ -282,6 +292,10 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             emergency_stop += 1
             if emergency_stop > 1000:
                 break
+
+        # xmlstr = minidom.parseString(etree.tostring(root)).toprettyxml(indent="   ")
+        # with open("debug.xml", "w") as f:
+        #    f.write(xmlstr)
 
         # remove duplicate consecutive elements
         # need to check if it affects min-elements
@@ -294,13 +308,17 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                     if child.text == prev.text and child.tag == prev.tag:
                         child.getparent().remove(child)
 
+        # xmlstr = minidom.parseString(etree.tostring(root)).toprettyxml(indent="   ")
+        # with open("debug.xml", "w") as f:
+        #    f.write(xmlstr)
+
         if sys.version > "3":
             fd.write(str(etree.tostring(tree, pretty_print=True,
                                         encoding="UTF-8",
                                         xml_declaration=True), "UTF-8"))
         elif sys.version > "2.7":
             self.create_edit_config()
-            #tree.write(fd, encoding="UTF-8", pretty_print=True,
+            # tree.write(fd, encoding="UTF-8", pretty_print=True,
             #           xml_declaration=False)
         else:
             tree.write(fd, pretty_print=True, encoding="UTF-8")
@@ -439,6 +457,11 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                 parent.remove(nel)
         else:
             self.process_children(node, nel, newm, path, node.i_key)
+            kids = len(nel.getchildren())
+            if kids == 0:
+                parent = nel.getparent()
+                if parent is not None:
+                    parent.remove(nel)
 
     def list(self, node, elem, module, path):
         keys = []
@@ -452,8 +475,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
         minel = node.search_one("min-elements")
         maxel = node.search_one('max-elements')
 
-        #we hardcode some values here, regardless of other configuration
-        #e.g.: layer-protocol we need to have only 1 entry!
+        # we hardcode some values here, regardless of other configuration
+        # e.g.: layer-protocol we need to have only 1 entry!
         if node.arg == 'layer-protocol':
             return 0
         elif node.arg == 'server-ltp':
@@ -546,14 +569,37 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             q = xpath_parser.parse(when_statement.arg)
             try:
                 val = self.chk_xpath_expr(self.ctx, when_statement.i_orig_module,
-                                        when_statement.pos, target_node, target_node, q)
+                                          when_statement.pos, target_node, target_node, q)
                 where_to_find = None
                 if parent.tag == target_node.arg:
                     where_to_find = parent
+                elif node.arg == target_node.arg:
+                    found = False
+                    for kid in parent.getchildren():
+                        try:
+                            if 'name' in val:
+                                if kid.tag == val['name']:
+                                    where_to_find = kid
+                                    found = True
+                                    break
+                            elif 'pred' in val:
+                                if val['operand_1']['name'] == kid.tag or \
+                                        val['operand_2']['name'] == kid.tag:
+                                    where_to_find = kid
+                                    found = True
+                                    break
+                        except KeyError as exc:
+                            # TODO cover all cases if val['name'] does not exist
+                            break
+                    if not found:
+                        where_to_find = parent
+                        while where_to_find.getparent() is not None and where_to_find.tag != target_node.arg:
+                            where_to_find = where_to_find.getparent()
                 else:
                     where_to_find = parent
-                    while where_to_find.tag != target_node.arg and where_to_find is not None:
+                    while where_to_find.getparent() is not None and where_to_find.tag != target_node.arg:
                         where_to_find = where_to_find.getparent()
+
                 when_in_xml = verify_xml_xpath_expr(val, where_to_find)
                 if when_in_xml is False or when_in_xml is None:
                     return None, module, path
@@ -566,7 +612,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
         if mm != module:
             res.attrib["xmlns"] = self.ns_uri[mm]
             module = mm
-        #if when is not None:
+        # if when is not None:
         #    res.attrib['when'] = when
         return res, module, path
 
@@ -586,7 +632,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             # we iterate through all the nodes in the leafref
             for list_elem in node.i_leafref.i_path_list:
                 if list_elem[0] == 'up':
-                    #target = '../' + target
+                    # target = '../' + target
                     continue
                 # we extract the node element from the path_list
                 target_node = list_elem[1]
@@ -607,12 +653,11 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                 return "leafrefkey:%s" % target, None
             return "leafref:%s" % target, None
 
-
         if n_type is not None:
             # search the "when" constraints for a value
             if node.arg is not None and node.i_module is not None and \
                     not isinstance(n_type.i_type_spec, pType.IdentityrefTypeSpec):
-                value = self.get_when_entry(node.arg, node.i_module.arg)
+                value = self.get_when_entry(node.arg, node.i_module.arg, node.pos)
                 if value is not None:
                     return value, None
 
@@ -649,7 +694,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                     rand_datetime = datetime.datetime.utcnow() - datetime.timedelta(seconds=randrange(1, 59),
                                                                                     minutes=randrange(10, 59),
                                                                                     hours=randrange(0, 1000),
-                                                                                    days=randrange(0,30))
+                                                                                    days=randrange(0, 30))
                     rand_string = rand_datetime.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-5] + "Z"
                     return rand_string, None
                 elif 'ipv4-address' in n_type.arg:
@@ -698,7 +743,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             elif isinstance(n_type.i_type_spec, pType.RangeTypeSpec):
                 if len(n_type.i_type_spec.ranges) > 0:
                     rand_range = choice(n_type.i_type_spec.ranges)
-                    if rand_range[0] is not None and rand_range[1] is not None and n_type.i_type_spec.name != 'decimal64':
+                    if rand_range[0] is not None and rand_range[
+                        1] is not None and n_type.i_type_spec.name != 'decimal64':
                         if rand_range[0] == 'min':
                             min = n_type.i_type_spec.min
                         else:
@@ -720,24 +766,53 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                 else:
                     return str(randrange(n_type.i_type_spec.min, n_type.i_type_spec.max)), None
             elif isinstance(n_type.i_type_spec, pType.IdentityrefTypeSpec):
-                identity_name = n_type.i_type_spec.idbases[0].i_identity.arg
-                identity_prefix = n_type.i_type_spec.idbases[0].i_module.i_prefix
-                identity = identity_prefix + ':' + identity_name
+                identity_name = n_type.i_type_spec.idbases[0].arg
+                is_namespace = identity_name.find(':')
+                if is_namespace != -1:
+                    identity = identity_name
+                    identity_prefix = identity_name[0:is_namespace]
+                    err = []
+                    identity_module = util.prefix_to_module(node.i_module, identity_prefix, node.pos, err)
+                    identity_name = identity_name[is_namespace + 1:]
+                else:
+                    identity_prefix = n_type.i_type_spec.idbases[0].i_module.i_prefix
+                    err = []
+                    identity_module = util.prefix_to_module(node.i_module, identity_prefix, node.pos, err)
+                    identity = identity_prefix + ':' + identity_name
+                emergency_exit = 0
                 while True:
-                    when_value = self.get_when_entry(node.arg, node.i_module.arg)
+                    if emergency_exit > 1000:
+                        break
+                    emergency_exit = emergency_exit + 1
+                    when_value = self.get_when_entry(node.arg, node.i_module.arg, node.pos)
                     ref_list = []
                     for id_ref in self.identity_refs:
                         values = id_ref['ref_list']
-                        if len(values) > 0:
+                        found = False
+                        while len(values) > 0 and found is not True:
                             try:
                                 id_name = values[-1]
+                                values = values[:-1]
+
+                                is_namespace = id_name.find(':')
+                                if is_namespace != -1:
+                                    id_prefix = id_name[0:is_namespace]
+                                    id_name = id_name[is_namespace + 1:]
+                                    if id_prefix is not None and identity_module is not None and \
+                                            id_prefix == identity_module.i_prefix and id_name == identity_name:
+                                        ref_list.append(id_ref)
+                                        found = True
+                                    elif id_name == identity_name:
+                                        ref_list.append(id_ref)
+                                        found = True
                             except IndexError:
                                 continue
-                            if id_name == identity:
+                            if found is False and id_name == identity:
                                 ref_list.append(id_ref)
+                    random_identity = None
                     if len(ref_list) == 0:
                         for id_ref in self.identity_refs:
-                            if id_ref['identity_name'] == identity:
+                            if id_ref['identity_name'] == identity_name:
                                 random_identity = id_ref
                                 break
                         pass
@@ -755,14 +830,17 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                     return random_identity['prefix'] + ':' + random_identity['identity_name'], nsmap
                 else:
                     return random_identity['identity_name'], None
-                #text = n_type.i_type_spec.name + ':' + n_type.i_type_spec.idbases[0].i_identity.arg
-                #return text
+                # text = n_type.i_type_spec.name + ':' + n_type.i_type_spec.idbases[0].i_identity.arg
+                # return text
             elif isinstance(n_type.i_type_spec, pType.EmptyTypeSpec):
                 return "", None
             elif isinstance(n_type.i_type_spec, pType.UnionTypeSpec):
-                #union_type = choice(n_type.i_type_spec.types)
-                #we choose the first union type, which in theory is the most restrictive
-                union_type = n_type.i_type_spec.types[0]
+                # union_type = choice(n_type.i_type_spec.types)
+                # we choose the first union type, which in theory is the most restrictive
+                if node.arg == 'facility' and node.i_module.arg == 'org-openroadm-syslog':
+                    union_type = n_type.i_type_spec.types[1]
+                else:
+                    union_type = n_type.i_type_spec.types[0]
                 return self.get_random_text(node=node, elem=None, ntype=union_type)
             elif isinstance(n_type.i_type_spec, pType.BitTypeSpec):
                 text = ''
@@ -776,7 +854,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                 rand_num = randrange(n_type.i_type_spec.min.value, n_type.i_type_spec.max.value)
                 rand_str = str(rand_num)
                 rand_str = rand_str[:-(n_type.i_type_spec.fraction_digits)] + '.' + \
-                        rand_str[-(n_type.i_type_spec.fraction_digits):]
+                           rand_str[-(n_type.i_type_spec.fraction_digits):]
                 return rand_str, None
             elif isinstance(n_type.i_type_spec, pType.BinaryTypeSpec):
                 while True:
@@ -785,6 +863,9 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                     if len(encoded) % 4 == 0:
                         break
                 return encoded, None
+            elif isinstance(n_type.i_type_spec, pType.InstanceIdentifierTypeSpec):
+                nsmap = {'org-openroadm-device': 'http://org/openroadm/device'}
+                return '/org-openroadm-device:org-openroadm-device/org-openroadm-device:info', nsmap
         return "dummystring", None
 
     def resolve_leafrefs(self, root, is_leafref_key):
@@ -824,7 +905,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                 grandpar.remove(par)
             else:
                 par = kid.getparent()
-                par.remove(kid)
+                if par is not None:
+                    par.remove(kid)
 
         found_kid = False
         for child in root.getiterator():
@@ -843,6 +925,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                 try:
                     leafref_targets = root.xpath(target)
                 except etree.XPathEvalError as exc:
+                    remove_child(child, is_leafref_key)
+                except TypeError as exc:
                     remove_child(child, is_leafref_key)
                 if len(leafref_targets) > 0:
                     leafref_target = choice(leafref_targets)
@@ -905,7 +989,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             pass
 
         # we iterate further down the tree recursively
-        #TODO see what happens in 'case', possible bug
+        # TODO see what happens in 'case', possible bug
         if type(node) in [statements.ModSubmodStatement, statements.ContainerStatement, statements.ListStatement]:
             try:
                 kids = node.i_children
@@ -969,8 +1053,10 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                         isinstance(value, basestring):
                     target_node_module = target_node.i_module.arg
                     target_node_name = target_node.arg
-                    new_dict = {'name': target_node_name, 'module': target_node_module, 'value': value, 'operator': q[1],
-                                'type': 'comp'}
+                    target_node_pos = target_node.pos.line
+                    new_dict = {'name': target_node_name, 'module': target_node_module, 'value': value,
+                                'operator': q[1],
+                                'type': 'comp', 'pos': target_node_pos}
                     return new_dict
                 pass
             elif q[0] == 'arith':
@@ -994,8 +1080,9 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                             isinstance(value, basestring):
                         target_node_module = target_node.i_module.arg
                         target_node_name = target_node.arg
+                        target_node_pos = target_node.pos.line
                         new_dict = {'name': target_node_name, 'module': target_node_module, 'value': value,
-                                    'operator': '=', 'type': 'comp_idref'}
+                                    'operator': '=', 'type': 'comp_idref', 'pos': target_node_pos}
                         return new_dict
             elif q[0] == 'path_expr':
                 return self.chk_xpath_expr(ctx, mod, pos, initial, node, q[1])
@@ -1135,30 +1222,33 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                 return self.chk_xpath_expr(ctx, mod, pos, initial, node1, p)
             return self.chk_xpath_path(ctx, mod, pos, initial, node1, path[1:])
 
-    def add_when_entry(self, node_name, node_module, node_value):
+    def add_when_entry(self, node_name, node_module, node_value, node_pos):
         modified = False
         for node in self.when_values:
-            if node['name'] == node_name and node['module'] == node_module:
+            if node['name'] == node_name and node['module'] == node_module and \
+                    node['pos'] == node_pos:
                 if node_value not in node['values']:
                     node['values'].append(node_value)
                 modified = True
                 break
 
         if modified is False:
-            new_node = {'name': node_name, 'module': node_module, 'values': []}
+            new_node = {'name': node_name, 'module': node_module, 'values': [], 'pos': node_pos}
             new_node['values'].append(node_value)
             self.when_values.append(new_node)
 
-    def get_when_entry(self, node_name, node_module):
+    def get_when_entry(self, node_name, node_module, node_pos):
         for node in self.when_values:
-            if node['name'] == node_name and node['module'] == node_module:
+            if node['name'] == node_name and node['module'] == node_module and \
+                    node['pos'] == node_pos:
                 random_value = choice(node['values'])
                 return random_value
         return None
 
     def add_xml_xpath_expr(self, returned_xpath):
         if returned_xpath['type'] == 'comp' or returned_xpath['type'] == 'comp_idref':
-            return self.add_when_entry(returned_xpath['name'], returned_xpath['module'], returned_xpath['value'])
+            return self.add_when_entry(returned_xpath['name'], returned_xpath['module'],
+                                       returned_xpath['value'], returned_xpath['pos'])
         elif returned_xpath['type'] == 'bool':
             operand_1 = returned_xpath['operand_1']
             operand_2 = returned_xpath['operand_2']
