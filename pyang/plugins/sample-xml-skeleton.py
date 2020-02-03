@@ -245,7 +245,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
 
         self.layer_protocol_name = ["OTU", "ODU", "ETH", "ETY", "MWPS", "MWS", "ETC"]
         self.excluded_modules = ["ietf-netconf-acm", "ietf-netconf-monitoring", "ietf-yang-library",
-                                 "openconfig-telemetry"]
+                                 "ietf-netconf", "openconfig-telemetry"]
 
         self.ctx = ctx
 
@@ -341,6 +341,11 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
         module_tree = etree.ElementTree(edit_config)
         module_tree.write(fd_for_module, encoding="UTF-8", pretty_print=True,
                           xml_declaration=False)
+
+    #def create_openroadm_xmls(self):
+    #    for child in self.top:
+    #        for kid in child:
+    #
 
     def process_children(self, node, elem, module, path, omit=[]):
         """Proceed with all children of `node`."""
@@ -487,6 +492,10 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             return 1
         elif node.arg == 'historical-performance-data-list':
             return 95
+        elif node.arg == 'circuit-packs':
+            return 2
+        elif node.arg == 'ports':
+            return 2
 
         num_entries_constraint = 0
         for constraint in self.constraints:
@@ -558,10 +567,10 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             else:
                 return parent, module, None
 
-        status = node.search_one("status")
-        if status is not None:
-            if status.arg == 'deprecated':
-                return None, module, path
+        #status = node.search_one("status")
+        #if status is not None:
+        #    if status.arg == 'deprecated':
+        #        return None, module, path
 
         # if the node is under a when statement, we just remove it from the generated XML
         when_statement, target_node = is_when_statement_present(node)
@@ -802,7 +811,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                                             id_prefix == identity_module.i_prefix and id_name == identity_name:
                                         ref_list.append(id_ref)
                                         found = True
-                                    elif id_name == identity_name:
+                                    elif id_name == identity_name and id_prefix == identity_prefix:
                                         ref_list.append(id_ref)
                                         found = True
                             except IndexError:
