@@ -317,7 +317,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                                         encoding="UTF-8",
                                         xml_declaration=True), "UTF-8"))
         elif sys.version > "2.7":
-            self.create_edit_config()
+            #self.create_edit_config()
+            self.create_openroadm_xmls()
             # tree.write(fd, encoding="UTF-8", pretty_print=True,
             #           xml_declaration=False)
         else:
@@ -342,10 +343,18 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
         module_tree.write(fd_for_module, encoding="UTF-8", pretty_print=True,
                           xml_declaration=False)
 
-    #def create_openroadm_xmls(self):
-    #    for child in self.top:
-    #        for kid in child:
-    #
+    def create_openroadm_xmls(self):
+        for child in self.top:
+            if len(child.getchildren()) > 0:
+                module_name = child.tag + '.xml'
+                module_name = child.tag + '.xml'
+                fd_for_module = open(module_name, 'w')
+                fd_for_module.close()
+                for kid in child:
+                    fd_for_module = open(module_name, 'a')
+                    xmlstr = minidom.parseString(etree.tostring(kid)).toprettyxml(indent="   ")
+                    fd_for_module.write(xmlstr.encode('utf-8'))
+                    fd_for_module.close()
 
     def process_children(self, node, elem, module, path, omit=[]):
         """Proceed with all children of `node`."""
