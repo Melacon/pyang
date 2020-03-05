@@ -802,7 +802,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                                             id_prefix == identity_module.i_prefix and id_name == identity_name:
                                         ref_list.append(id_ref)
                                         found = True
-                                    elif id_name == identity_name:
+                                    elif id_prefix is not None and identity_prefix is not None and \
+                                            id_prefix == identity_prefix and id_name == identity_name:
                                         ref_list.append(id_ref)
                                         found = True
                             except IndexError:
