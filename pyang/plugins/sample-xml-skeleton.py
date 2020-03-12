@@ -487,6 +487,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             return 1
         elif node.arg == 'historical-performance-data-list':
             return 95
+        elif node.arg == 'software-slot':
+            return 16
 
         num_entries_constraint = 0
         for constraint in self.constraints:
@@ -862,7 +864,12 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                            rand_str[-(n_type.i_type_spec.fraction_digits):]
                 return rand_str, None
             elif isinstance(n_type.i_type_spec, pType.BinaryTypeSpec):
+                emergency_stop = 1
+                encoded = None
                 while True:
+                    if emergency_stop > 1000:
+                        break
+                    emergency_stop = emergency_stop + 1
                     rand_bits = getrandbits(128)
                     encoded = base64.b64encode(str(rand_bits).encode("utf-8"))
                     if len(encoded) % 4 == 0:
