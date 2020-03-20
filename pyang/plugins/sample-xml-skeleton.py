@@ -245,16 +245,18 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
 
         self.layer_protocol_name = ["OTU", "ODU", "ETH", "ETY", "MWPS", "MWS", "ETC"]
         self.excluded_modules = ["ietf-netconf-acm", "ietf-netconf-monitoring", "ietf-yang-library",
-                                 "openconfig-telemetry"]
+                                 "ietf-netconf", "openconfig-telemetry"]
 
         self.ctx = ctx
 
         self.constraints = []
         self.when_values = []
+        self.module_names = []
 
         for yam in modules:
             self.count_leafref_entries(yam)
             self.search_when_constraints(yam)
+            self.module_names.append(yam.arg)
 
         # we generate the identityref values
         self.identity_refs = []
@@ -318,6 +320,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                                         xml_declaration=True), "UTF-8"))
         elif sys.version > "2.7":
             self.create_edit_config()
+            self.create_openroadm_xmls()
             # tree.write(fd, encoding="UTF-8", pretty_print=True,
             #           xml_declaration=False)
         else:
@@ -341,6 +344,19 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
         module_tree = etree.ElementTree(edit_config)
         module_tree.write(fd_for_module, encoding="UTF-8", pretty_print=True,
                           xml_declaration=False)
+
+    def create_openroadm_xmls(self):
+        for child in self.top:
+            if len(child.getchildren()) > 0:
+                module_name = child.tag + '.xml'
+                module_name = child.tag + '.xml'
+                fd_for_module = open(module_name, 'w')
+                fd_for_module.close()
+                for kid in child:
+                    fd_for_module = open(module_name, 'a')
+                    xmlstr = minidom.parseString(etree.tostring(kid)).toprettyxml(indent="   ")
+                    fd_for_module.write(xmlstr.encode('utf-8'))
+                    fd_for_module.close()
 
     def process_children(self, node, elem, module, path, omit=[]):
         """Proceed with all children of `node`."""
@@ -487,6 +503,12 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             return 1
         elif node.arg == 'historical-performance-data-list':
             return 95
+        elif node.arg == 'circuit-packs':
+            return 2
+        elif node.arg == 'ports':
+            return 2
+        elif node.arg == 'software-slot':
+            return 16
 
         num_entries_constraint = 0
         for constraint in self.constraints:
@@ -657,7 +679,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             # search the "when" constraints for a value
             if node.arg is not None and node.i_module is not None and \
                     not isinstance(n_type.i_type_spec, pType.IdentityrefTypeSpec):
-                value = self.get_when_entry(node.arg, node.i_module.arg, node.pos)
+            # if node.arg is not None and node.i_module is not None:
+                value = self.get_when_entry(node.arg, node.i_module.arg, node.pos.line)
                 if value is not None:
                     return value, None
 
@@ -669,6 +692,10 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                     return str(uuid.uuid4()), None
                 elif n_type.arg == 'layer-protocol-name':
                     return choice(self.layer_protocol_name), None
+                elif n_type.arg == 'yang:xpath1.0' and \
+                        'ietf-hardware' in self.module_names:
+                    nsmap = {'hw': 'urn:ietf:params:xml:ns:yang:ietf-hardware'}
+                    return '/hw:hardware/hw:component/hw:name', nsmap
                 else:
                     # we generate a random string with length between 5 and 20, domainsafe - letters, digits and "-"
                     rand_string = rstr.rstr(rstr.domainsafe(), 5, 20)
@@ -733,8 +760,12 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                             str_length = type_base.lengths[0][0]
                         except IndexError:
                             pass
+                        emergency_stop = 1
                         while True:
                             rand_string = exrex.getone(regex)
+                            if emergency_stop > 1000:
+                                break
+                            emergency_stop = emergency_stop + 1
                             if len(rand_string) == str_length:
                                 break
                     else:
@@ -784,7 +815,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                     if emergency_exit > 1000:
                         break
                     emergency_exit = emergency_exit + 1
-                    when_value = self.get_when_entry(node.arg, node.i_module.arg, node.pos)
+                    when_value = self.get_when_entry(node.arg, node.i_module.arg, node.pos.line)
                     ref_list = []
                     for id_ref in self.identity_refs:
                         values = id_ref['ref_list']
@@ -858,15 +889,26 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                            rand_str[-(n_type.i_type_spec.fraction_digits):]
                 return rand_str, None
             elif isinstance(n_type.i_type_spec, pType.BinaryTypeSpec):
+                emergency_stop = 1
+                encoded = None
                 while True:
+                    if emergency_stop > 1000:
+                        break
+                    emergency_stop = emergency_stop + 1
                     rand_bits = getrandbits(128)
                     encoded = base64.b64encode(str(rand_bits).encode("utf-8"))
                     if len(encoded) % 4 == 0:
                         break
                 return encoded, None
             elif isinstance(n_type.i_type_spec, pType.InstanceIdentifierTypeSpec):
-                nsmap = {'org-openroadm-device': 'http://org/openroadm/device'}
-                return '/org-openroadm-device:org-openroadm-device/org-openroadm-device:info', nsmap
+                if "resource" in node.arg and "o-ran-sc-root-v1" in self.module_names:
+                    nsmap = {'o-ran-sc-root-v1': 'urn:o-ran:sc:root:1.0'}
+                    return '/o-ran-sc-root-v1:controlled-element/' \
+                           'o-ran-sc-root-v1:controlled-function/' \
+                           'o-ran-sc-root-v1:identifier', nsmap
+                else:
+                    nsmap = {'org-openroadm-device': 'http://org/openroadm/device'}
+                    return '/org-openroadm-device:org-openroadm-device/org-openroadm-device:info', nsmap
         return "dummystring", None
 
     def resolve_leafrefs(self, root, is_leafref_key):
@@ -903,7 +945,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             if is_key is True:
                 par = kid.getparent()
                 grandpar = par.getparent()
-                grandpar.remove(par)
+                if grandpar is not None:
+                    grandpar.remove(par)
             else:
                 par = kid.getparent()
                 if par is not None:
