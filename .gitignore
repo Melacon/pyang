@@ -37,3 +37,4 @@ schemas.xml
 .pydevproject
 /venv/*
 /bin/*.xml
+!*.idea

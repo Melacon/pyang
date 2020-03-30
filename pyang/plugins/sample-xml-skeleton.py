@@ -48,6 +48,7 @@ import re
 from ipaddress import IPv4Address, IPv6Address
 import base64
 from xml.dom import minidom
+import math
 
 
 def pyang_plugin_init():
@@ -252,6 +253,9 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
         self.constraints = []
         self.when_values = []
         self.module_names = []
+
+        # hardcoded for core-model-1-4 layer-protocol-name
+        self.identityref_number = 0
 
         for yam in modules:
             self.count_leafref_entries(yam)
@@ -481,6 +485,10 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
 
     def list(self, node, elem, module, path):
         keys = []
+        if node.arg == 'embedded-clock' and node.i_module.arg == 'core-model-1-4':
+            return
+        elif node.arg == 'fd' and node.i_module.arg == 'core-model':
+            return
         self.list_base(node, elem, module, path, prev_keys=keys)
         rep = self.get_num_reps(node)
 
@@ -509,6 +517,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             return 2
         elif node.arg == 'software-slot':
             return 16
+        elif node.arg == 'logical-termination-point' and node.keyword == 'list':
+            return 20
 
         num_entries_constraint = 0
         for constraint in self.constraints:
@@ -712,6 +722,42 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                             max = 255
                         rand_string = rstr.rstr(rstr.domainsafe(), min, max)
                         return rand_string, None
+                if isinstance(n_type.i_type_spec.base, pType.BinaryTypeSpec):
+                    emergency_stop = 1
+                    encoded = None
+
+                    def generate_binary(n):
+
+                        bin_arr = []
+                        bin_str = [0] * n
+
+                        for i in xrange(0, int(math.pow(2, n))):
+
+                            bin_arr.append("".join(map(str, bin_str))[::-1])
+                            bin_str[0] += 1
+
+                            # Iterate through entire array if there carrying
+                            for j in xrange(0, len(bin_str) - 1):
+
+                                if bin_str[j] == 2:
+                                    bin_str[j] = 0
+                                    bin_str[j + 1] += 1
+                                    continue
+
+                                else:
+                                    break
+
+                        return bin_arr
+
+                    while True:
+                        if emergency_stop > 1000:
+                            break
+                        emergency_stop = emergency_stop + 1
+                        rand_str = generate_binary(8)
+                        enc_str = base64.b64encode(choice(rand_str).encode("utf-8"))
+                        if len(rand_str) == 8:
+                            break
+                    return enc_str, None
             elif isinstance(n_type.i_type_spec, pType.IntTypeSpec):
                 return str(randrange(n_type.i_type_spec.min, n_type.i_type_spec.max)), None
             elif isinstance(n_type.i_type_spec, pType.BooleanTypeSpec):
@@ -797,6 +843,22 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                 else:
                     return str(randrange(n_type.i_type_spec.min, n_type.i_type_spec.max)), None
             elif isinstance(n_type.i_type_spec, pType.IdentityrefTypeSpec):
+                # hardcoded for core-model-1-4, to have at least one type of each interface
+                if node.arg == 'layer-protocol-name' and node.i_module.arg == 'core-model-1-4':
+                    ref_list = [{'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_AIR_LAYER', 'prefix': u'air-interface', 'namespace': u'urn:onf:yang:air-interface-2-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']},
+{'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_ETHERNET_CONTAINER_LAYER', 'prefix': u'ethernet-container', 'namespace': u'urn:onf:yang:ethernet-container-2-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']},
+{'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_HYBRID_MW_STRUCTURE_LAYER', 'prefix': u'hybrid-mw-structure', 'namespace': u'urn:onf:yang:hybrid-mw-structure-2-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']},
+{'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_IP_LAYER', 'prefix': u'ip-interface', 'namespace': u'urn:onf:yang:ip-interface-1-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']},
+{'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_MAC_LAYER', 'prefix': u'mac-interface', 'namespace': u'urn:onf:yang:mac-interface-1-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']},
+{'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_PURE_ETHERNET_STRUCTURE_LAYER', 'prefix': u'pure-ethernet-structure', 'namespace': u'urn:onf:yang:pure-ethernet-structure-2-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']},
+{'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_TDM_CONTAINER_LAYER', 'prefix': u'tdm-container', 'namespace': u'urn:onf:yang:tdm-container-2-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']},
+{'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_WIRE_LAYER', 'prefix': u'wire-interface', 'namespace': u'urn:onf:yang:wire-interface-2-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']}]
+                    refid = self.identityref_number % 8
+                    self.identityref_number = self.identityref_number + 1
+                    random_identity = ref_list[refid]
+                    nsmap = {random_identity['prefix']: random_identity['namespace']}
+                    return random_identity['prefix'] + ':' + random_identity['identity_name'], nsmap
+
                 identity_name = n_type.i_type_spec.idbases[0].arg
                 is_namespace = identity_name.find(':')
                 if is_namespace != -1:
