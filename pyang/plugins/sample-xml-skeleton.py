@@ -66,7 +66,8 @@ def make_target_for_xpath(target, current_node):
     target = re.sub('\[[^:^\]]+:', '[', target)
 
     current_index = target.find('current()/')
-    if current_index > 0:
+
+    while current_index > 0:
         last_index = target.find(']', current_index)
         beginning_index = current_index + len('current()/')
         path = target[beginning_index:last_index]
@@ -85,6 +86,7 @@ def make_target_for_xpath(target, current_node):
         if found is False:
             return None
         target = "'".join((target[:current_index], target_node.text, target[last_index:]))
+        current_index = target.find('current()/')
 
     return target
 
