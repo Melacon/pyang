@@ -147,6 +147,7 @@ def verify_when_in_xml(target_node_name, target_node_module, node_value, xml_nod
 def delete_remaining_leafrefs(root):
     for child in root.getiterator():
         if child.text is not None and "leafref" in child.text:
+            # workaround for O-RAN yang modules vid elements
             parent = child.getparent()
             parent.remove(child)
 
@@ -1008,13 +1009,22 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
         def remove_child(kid, is_key):
             if is_key is True:
                 par = kid.getparent()
-                grandpar = par.getparent()
-                if grandpar is not None:
-                    grandpar.remove(par)
-            else:
-                par = kid.getparent()
                 if par is not None:
-                    par.remove(kid)
+                    grandpar = par.getparent()
+                    if grandpar is not None:
+                        grandpar.remove(par)
+            else:
+                # workaround for vid elements in O-RAN, we delete the parent element of vid entirely, because min-elements is not satisfied
+                if kid.tag == 'vid':
+                    par = kid.getparent()
+                    if par is not None:
+                        grandpar = par.getparent()
+                        if grandpar is not None:
+                            grandpar.remove(par)
+                else:
+                    par = kid.getparent()
+                    if par is not None:
+                        par.remove(kid)
 
         found_kid = False
         for child in root.getiterator():
