@@ -1059,7 +1059,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                         else:
                             leafref_target = choice(leafref_targets)
                     child.text = leafref_target.text
-                    if emergency_stop > 1000:
+                    # special fix for ENBCU-4.5.1.7 model
+                    if emergency_stop > 1000 and node_module_name != 'enbcu-4.5.1.7':
                         remove_child(child, is_leafref_key)
                 else:
                     remove_child(child, is_leafref_key)
