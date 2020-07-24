@@ -249,7 +249,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
 
         self.layer_protocol_name = ["OTU", "ODU", "ETH", "ETY", "MWPS", "MWS", "ETC"]
         self.excluded_modules = ["ietf-netconf-acm", "ietf-netconf-monitoring", "ietf-yang-library",
-                                 "ietf-netconf", "openconfig-telemetry"]
+                                 "ietf-netconf", "openconfig-telemetry", "ietf-alarms"]
 
         self.ctx = ctx
 
@@ -522,6 +522,8 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
             return 16
         elif node.arg == 'logical-termination-point' and node.keyword == 'list':
             return 20
+        elif node.arg == 'equipment' and node.keyword == 'list':
+            return 16
 
         num_entries_constraint = 0
         for constraint in self.constraints:
@@ -922,7 +924,12 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                     elif when_value == random_identity_value:
                         break
 
-                if random_identity['prefix'] != node.i_module.i_prefix:
+                # if random_identity['prefix'] != node.i_module.i_prefix:
+                # it might happen that two different YANG models have the same namespace, we double check for that (happened in YES models)
+                if (node.i_module.substmts[1] is not None and node.i_module.substmts[1].raw_keyword == 'namespace' and\
+                        random_identity['namespace'] != node.i_module.substmts[1].arg) or \
+                    (node.i_module.substmts[0] is not None and node.i_module.substmts[0].raw_keyword == 'namespace' and\
+                        random_identity['namespace'] != node.i_module.substmts[1].arg):
                     nsmap = {random_identity['prefix']: random_identity['namespace']}
                     return random_identity['prefix'] + ':' + random_identity['identity_name'], nsmap
                 else:
