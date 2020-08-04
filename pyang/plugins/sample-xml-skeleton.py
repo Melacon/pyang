@@ -49,6 +49,7 @@ from ipaddress import IPv4Address, IPv6Address
 import base64
 from xml.dom import minidom
 import math
+import string
 
 
 def pyang_plugin_init():
@@ -106,6 +107,10 @@ def generate_random_ipaddr(version):
     return addr_str
 
 
+def generate_random_ipv6_prefix():
+    return '%x::%x:%x/64' % (getrandbits(16), getrandbits(16), getrandbits(16))
+
+
 def generate_random_macaddr():
     return "%02x:%02x:%02x:%02x:%02x:%02x" % (randint(0, 255),
                                               randint(0, 255),
@@ -114,6 +119,11 @@ def generate_random_macaddr():
                                               randint(0, 255),
                                               randint(0, 255))
 
+
+def get_random_string(length):
+    letters = string.ascii_lowercase
+    result_str = ''.join(choice(letters) for i in range(length))
+    return result_str
 
 def is_when_statement_present(node):
     when_statement = node.search_one('when')
@@ -249,7 +259,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
 
         self.layer_protocol_name = ["OTU", "ODU", "ETH", "ETY", "MWPS", "MWS", "ETC"]
         self.excluded_modules = ["ietf-netconf-acm", "ietf-netconf-monitoring", "ietf-yang-library",
-                                 "ietf-netconf", "openconfig-telemetry", "ietf-alarms"]
+                                 "ietf-netconf", "openconfig-telemetry", "ietf-alarms", "ietf-yang-schema-mount"]
 
         self.ctx = ctx
 
@@ -521,7 +531,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
         elif node.arg == 'software-slot':
             return 16
         elif node.arg == 'logical-termination-point' and node.keyword == 'list':
-            return 20
+            return 24
         elif node.arg == 'equipment' and node.keyword == 'list':
             return 16
 
@@ -779,6 +789,11 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                     return generate_random_ipaddr(4), None
                 elif 'ipv6-address' in n_type.arg:
                     return generate_random_ipaddr(6), None
+                elif 'ipv6-prefix' in n_type.arg:
+                    return generate_random_ipv6_prefix(), None
+                elif 'DistinguishedName' in n_type.arg:
+                    return 'UID=' + get_random_string(20) + \
+                           '@example.com,DC=example,DC=com,CN=John Smith,OU=Sales,O=ACME Limited,L=Moab,ST=Utah,C=US', None
                 elif 'password-type' in n_type.arg:
                     regex = n_type.i_type_spec.res[0][4]
                     if isinstance(n_type.i_type_spec.base, pType.LengthTypeSpec):
@@ -839,9 +854,9 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                     elif n_type.i_type_spec.name == 'decimal64':
                         min = n_type.i_type_spec.min.value
                         max = n_type.i_type_spec.max.value
-                        rand_str = str(randrange(min, max))
-                        rand_str = rand_str[:-(n_type.i_type_spec.fraction_digits)] + '.' + \
-                                   rand_str[-(n_type.i_type_spec.fraction_digits):]
+                        rand_str = str(format(float(randrange(min, max))/pow(10, n_type.i_type_spec.fraction_digits),
+                                              '.' + str(n_type.i_type_spec.fraction_digits) + 'f'))
+
                         return rand_str, None
                     else:
                         return str(rand_range[0]), None
@@ -857,8 +872,9 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
 {'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_MAC_LAYER', 'prefix': u'mac-interface', 'namespace': u'urn:onf:yang:mac-interface-1-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']},
 {'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_PURE_ETHERNET_STRUCTURE_LAYER', 'prefix': u'pure-ethernet-structure', 'namespace': u'urn:onf:yang:pure-ethernet-structure-2-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']},
 {'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_TDM_CONTAINER_LAYER', 'prefix': u'tdm-container', 'namespace': u'urn:onf:yang:tdm-container-2-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']},
-{'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_WIRE_LAYER', 'prefix': u'wire-interface', 'namespace': u'urn:onf:yang:wire-interface-2-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']}]
-                    refid = self.identityref_number % 8
+{'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_WIRE_LAYER', 'prefix': u'wire-interface', 'namespace': u'urn:onf:yang:wire-interface-2-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']},
+{'identity_name': u'LAYER_PROTOCOL_NAME_TYPE_VLAN_LAYER', 'prefix': u'vlan-interface', 'namespace': u'urn:onf:yang:vlan-interface-1-0', 'ref_list': [u'core-model:LAYER_PROTOCOL_NAME_TYPE']}]
+                    refid = self.identityref_number % (len(ref_list))
                     self.identityref_number = self.identityref_number + 1
                     random_identity = ref_list[refid]
                     nsmap = {random_identity['prefix']: random_identity['namespace']}
@@ -978,6 +994,12 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                     return '/o-ran-sc-root-v1:controlled-element/' \
                            'o-ran-sc-root-v1:controlled-function/' \
                            'o-ran-sc-root-v1:identifier', nsmap
+                elif "aMFSet" in node.arg and "_3gpp-common-yang-types" in self.module_names:
+                    nsmap = {'subnet3gpp': 'urn:3gpp:sa5:_3gpp-common-subnetwork', 'amfset3gpp': 'urn:3gpp:sa5:_3gpp-5gc-nrm-amfset'}
+                    return '/subnet3gpp:SubNetwork/amfset3gpp:AMFSet/amfset3gpp:id', nsmap
+                elif "aMFRegion" in node.arg and "_3gpp-common-yang-types" in self.module_names:
+                    nsmap = {'subnet3gpp': 'urn:3gpp:sa5:_3gpp-common-subnetwork', 'amfr3gpp': 'urn:3gpp:sa5:_3gpp-5gc-nrm-amfregion'}
+                    return '/subnet3gpp:SubNetwork/amfr3gpp:AMFRegion/amfr3gpp:id', nsmap
                 else:
                     nsmap = {'org-openroadm-device': 'http://org/openroadm/device'}
                     return '/org-openroadm-device:org-openroadm-device/org-openroadm-device:info', nsmap
