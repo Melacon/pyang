@@ -269,6 +269,7 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
 
         # hardcoded for core-model-1-4 layer-protocol-name
         self.identityref_number = 0
+        self.core_model_1_4_external_label = False
 
         for yam in modules:
             self.count_leafref_entries(yam)
@@ -721,6 +722,15 @@ class SampleXMLSkeletonPlugin(plugin.PyangPlugin):
                         'ietf-hardware' in self.module_names:
                     nsmap = {'hw': 'urn:ietf:params:xml:ns:yang:ietf-hardware'}
                     return '/hw:hardware/hw:component/hw:name', nsmap
+                elif node.arg == 'value-name' and node.parent.arg == 'name' and \
+                        self.core_model_1_4_external_label is False:
+                    self.core_model_1_4_external_label = True
+                    return 'externalLabel', None
+                elif node.arg == 'value-name' and node.parent.arg == 'name' and \
+                        self.core_model_1_4_external_label is True:
+                    self.core_model_1_4_external_label = False
+                    rand_string = rstr.rstr(rstr.domainsafe(), 5, 20)
+                    return rand_string, None
                 else:
                     # we generate a random string with length between 5 and 20, domainsafe - letters, digits and "-"
                     rand_string = rstr.rstr(rstr.domainsafe(), 5, 20)
